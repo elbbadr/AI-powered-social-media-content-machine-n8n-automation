@@ -1,0 +1,663 @@
+{
+  "name": "promt generation , platforms content",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12,
+              "triggerAtMinute": {}
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1136,
+        32
+      ],
+      "id": "11a16b48-d1cc-45bf-abdb-4d011d558160",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "limit": 1,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "1AboHkQS8K7Q9eFZc1qRzQccoo7UHO8tY",
+            "mode": "list",
+            "cachedResultName": "generat video",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1AboHkQS8K7Q9eFZc1qRzQccoo7UHO8tY"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -912,
+        32
+      ],
+      "id": "fbdacb08-bf82-473f-85cf-deddbb0007b1",
+      "name": "Get one pic",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WPwyhCkfm7vvFOq0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -688,
+        32
+      ],
+      "id": "7d3910ac-913f-406b-b1ba-1e5325a4e38c",
+      "name": "Download the pic",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WPwyhCkfm7vvFOq0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "uploadFile",
+        "additionalFieldsFile": {
+          "folder": "cleanvanger automation"
+        }
+      },
+      "type": "n8n-nodes-cloudinary.cloudinary",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        32
+      ],
+      "id": "f68d5037-d4f9-48fe-8adc-edf302d4acd9",
+      "name": "Upload to Cloudinary",
+      "credentials": {
+        "cloudinaryApi": {
+          "id": "VFQGszS7oFkZeI14",
+          "name": "Cloudinary account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json.choices[0].message.content;\n\ntry {\n  const cleaned = raw\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/\\s*```$/i, '')\n    .trim();\n\n  const data = JSON.parse(cleaned);\n\n  const required = ['video_animation_prompt', 'post_title', 'post_description', 'comment_bait', 'hashtags'];\n  for (const field of required) {\n    if (!data[field]) throw new Error(`Missing field: ${field}`);\n  }\n\n  const platforms = ['instagram', 'tiktok', 'facebook', 'pinterest'];\n  for (const p of platforms) {\n    if (!data.hashtags[p] || !Array.isArray(data.hashtags[p])) {\n      throw new Error(`Missing hashtags.${p}`);\n    }\n  }\n\n  // === LOCK THE CTA ===\n  const FIXED_CTA        = 'If you want to see more short hair, say yes.';\n  const FIXED_DESC_CTA   = 'If you want to see more short hair styles like this, say YES in the comments.';\n\n  // Fix dialogue in prompt\n  let prompt = data.video_animation_prompt;\n  prompt = prompt.replace(\n    /(Dialogue \\(English\\):[\\s\\S]*?\")(.*?)(\"|$)/i,\n    (match, before, speech, end) => {\n      const base = speech\n        .replace(/[Ii]f you want to see more short hair[^.]*/gi, '')\n        .replace(/[Ss]ay [Yy][Ee][Ss][^.]*/gi, '')\n        .trim()\n        .replace(/\\.+$/, '');\n      return `${before}${base}. ${FIXED_CTA}${end}`;\n    }\n  );\n\n  // Fix post_description last sentence\n  const sentences = data.post_description.split(/(?<=[.!?])\\s+/).filter(s => s.trim());\n  const fixedDesc = [sentences[0] || '', sentences[1] || '', FIXED_DESC_CTA].filter(Boolean).join(' ');\n\n  // Quality score\n  const sections = ['First 3 seconds','Dialogue','Facial performance','Background music','Camera','Lighting','Style'];\n  const missing  = sections.filter(s => !prompt.includes(s));\n  const ctaOk    = prompt.includes(FIXED_CTA);\n  let score      = 100 - (missing.length * 10) - (ctaOk ? 0 : 30) - (data.post_title.length < 10 ? 10 : 0);\n\n  return {\n    video_animation_prompt: prompt,\n    post_title:             data.post_title,\n    post_description:       fixedDesc,\n    comment_bait:           data.comment_bait,\n    hashtags_instagram:     data.hashtags.instagram.join(' '),\n    hashtags_tiktok:        data.hashtags.tiktok.join(' '),\n    hashtags_facebook:      data.hashtags.facebook.join(' '),\n    hashtags_pinterest:     data.hashtags.pinterest.join(' '),\n    cta_enforced:           ctaOk ? 'AI correct' : 'JS fixed',\n    quality_score:          score,\n    quality_status:         score >= 70 ? 'PASS' : 'FAIL',\n    missing_sections:       missing.join(', ') || 'none',\n    run_timestamp:          new Date().toISOString()\n  };\n\n} catch (err) {\n  return { quality_status: 'FAIL', quality_score: 0, error: err.message, raw_text: raw };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        32
+      ],
+      "id": "128ca40c-0455-4425-b76b-4c94fefa0a29",
+      "name": "Parse, enforce CTA, validate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.quality_status }}",
+              "operation": "contains",
+              "value2": "PASS"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        208,
+        32
+      ],
+      "id": "676a7d34-eaaa-4824-a0a1-3cced502166e",
+      "name": "Quality gate"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build YouTube content from existing fields — NO extra API call needed\nconst c = $('Parse, enforce CTA, validate').item.json;\n\n// Extract hair style name from post_title (first 4 words as the core topic)\nconst titleWords = c.post_title.split(' ');\nconst hairTopic  = titleWords.slice(0, 5).join(' ');\n\n// YouTube title — SEO optimized, under 70 chars\nconst youtubeTitle = `${c.post_title} | Short Hair 2025`;\nconst safetitle    = youtubeTitle.slice(0, 70);\n\n// YouTube description — assembled from existing content, no AI needed\nconst youtubeDescription = [\n  c.post_description,\n  '',\n  'If this style inspired you, give this video a LIKE and SUBSCRIBE for daily short hair inspiration.',\n  '',\n  '--- Chapters ---',\n  '00:00 The look — first impression',\n  '00:03 Hair texture and movement',\n  '00:06 Why this cut is so flattering',\n  '00:18 The styling secret',\n  '00:35 Say yes for more short hair',\n  '',\n  c.hashtags_instagram.split(' ').slice(0, 10).join(', ')\n].join('\\n');\n\n// YouTube tags — built from instagram hashtags + fixed short hair terms\nconst baseTagsRaw  = c.hashtags_instagram.split(' ').map(t => t.replace('#', ''));\nconst extraTags    = ['short hair 2025','hairstyles 2025','short hair ideas','short haircut women','hair transformation','beauty tips','hair goals','short hair inspo','hair tutorial','salon hair'];\nconst allTags      = [...new Set([...baseTagsRaw, ...extraTags])].slice(0, 30);\n\n// Chapters\nconst chapters = [\n  { timestamp: '00:00', title: 'The look — first impression' },\n  { timestamp: '00:03', title: 'Hair texture and movement' },\n  { timestamp: '00:06', title: 'Why this cut is so flattering' },\n  { timestamp: '00:18', title: 'The styling secret' },\n  { timestamp: '00:35', title: 'Say yes for more short hair' }\n];\n\nreturn {\n  youtube_title:       safetitle,\n  youtube_description: youtubeDescription,\n  youtube_tags:        allTags.join(','),\n  youtube_chapters:    chapters.map(c => `${c.timestamp} ${c.title}`).join('\\n')\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -64
+      ],
+      "id": "7f866a29-10c1-453d-b6f3-ca7a7ba06f9a",
+      "name": "Build YouTube content (no API)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $('Parse, enforce CTA, validate').item.json;\nconst youtube  = $('Build YouTube content (no API)').item.json;\n\nconst instagramCaption = [\n  content.post_title, '',\n  content.post_description, '',\n  content.hashtags_instagram\n].join('\\n');\n\nconst tiktokCaption = [\n  content.post_title, '',\n  content.comment_bait, '',\n  content.hashtags_tiktok\n].join('\\n');\n\nconst facebookPost = [\n  content.post_title, '',\n  content.post_description, '',\n  content.comment_bait, '',\n  content.hashtags_facebook\n].join('\\n');\n\nconst pinterestDescription = [\n  content.post_title + ' — ' + content.post_description, '',\n  content.hashtags_pinterest\n].join('\\n');\n\nreturn {\n  video_animation_prompt: content.video_animation_prompt,\n  instagram_caption:      instagramCaption,\n  tiktok_caption:         tiktokCaption,\n  instagram_comment:      content.comment_bait,\n  facebook_post:          facebookPost,\n  pinterest_title:        content.post_title,\n  pinterest_description:  pinterestDescription,\n  youtube_title:          youtube.youtube_title,\n  youtube_description:    youtube.youtube_description,\n  youtube_tags:           youtube.youtube_tags,\n  youtube_chapters:       youtube.youtube_chapters,\n  run_timestamp:          content.run_timestamp,\n  quality_score:          content.quality_score,\n  cta_enforced:           content.cta_enforced,\n  image_public_url:       $('Upload to Cloudinary').item.json.url || ''\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        -64
+      ],
+      "id": "42fc49ed-8eaa-495e-8337-5d39a8660be1",
+      "name": "Merge all platform content"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  run_timestamp: new Date().toISOString(),\n  image_url: '', quality_score: $('Parse, enforce CTA, validate').item.json.quality_score || 0,\n  cta_enforced: 'N/A — failed', video_prompt: 'FAILED',\n  instagram_caption: 'FAILED — ' + ($('Parse, enforce CTA, validate').item.json.error || 'low score'),\n  tiktok_caption: '', facebook_post: '', pinterest_title: '', pinterest_description: '',\n  youtube_title: '', youtube_description: '', youtube_tags: '', youtube_chapters: ''\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        128
+      ],
+      "id": "d73c0e73-fa26-4da3-9b86-4f624dff06ca",
+      "name": "Prepare fail log"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"qwen/qwen3.5-9b\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a world-class viral beauty content strategist and scriptwriter. You create short-form video scripts that stop the scroll and drive massive comment engagement on Instagram, TikTok, Facebook, Pinterest, and YouTube Shorts.\\n\\nYour task: analyze the woman in the photo and return a JSON object with exactly five fields: video_animation_prompt, post_title, post_description, comment_bait, hashtags.\\n\\n==================================================\\nTHE DIALOGUE — MOST IMPORTANT RULE\\n==================================================\\n\\nThe woman speaks a 3-part script. Here is the EXACT formula:\\n\\nPART 1 — HOOK (one sentence, 6-10 words):\\nA bold, emotional, relatable opening line about her specific hair style. It must make the viewer feel something instantly — curiosity, recognition, or desire. Never generic. Always about the exact cut and look in the photo.\\nExamples:\\n  \\\"I am obsessed with this textured, short cut.\\\"\\n  \\\"Everyone told me not to cut it — I am so glad I did.\\\"\\n  \\\"This is the most underrated haircut of the year.\\\"\\n  \\\"You have absolutely been sleeping on this style.\\\"\\n\\nPART 2 — VALUE (two sentences, 20-28 words total):\\nDescribe exactly what makes THIS specific hair style special. Mention the texture, movement, volume, face-framing, ease of styling, or confidence it brings — based on what you actually see in the photo. Speak like a trusted beauty insider, not an advertiser.\\nExample (for a wavy short cut):\\n  \\\"It adds so much movement and volume while completely modernizing the face. The loose waves make it effortless to style every single day.\\\"\\nExample (for a pixie bob):\\n  \\\"The choppy layers frame the cheekbones beautifully and add instant texture. It is low-maintenance, bold, and works on every face shape.\\\"\\n\\nPART 3 — CTA (FIXED — COPY THIS EXACTLY, EVERY TIME, NO EXCEPTIONS):\\n  If you want to see more short hair, say yes.\\n\\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\nCRITICAL: PART 3 IS ALWAYS AND ONLY:\\n\\\"If you want to see more short hair, say yes.\\\"\\nDo NOT change a single word. Do NOT add words before or after it inside the quotes.\\nDo NOT paraphrase it. Do NOT replace \\\"yes\\\" with \\\"YES\\\". Do NOT add an exclamation mark.\\nThe dialogue field must end with this sentence, exactly as written above.\\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\n\\nFULL DIALOGUE EXAMPLES (study these carefully):\\n\\nExample A — wavy short bob:\\n\\\"I am obsessed with this textured, short cut. It adds so much movement and volume while completely modernizing the face. The loose waves make it effortless to style every single day. If you want to see more short hair, say yes.\\\"\\n\\nExample B — pixie bob:\\n\\\"A textured pixie-bob brings so much volume and life to your hair. It is incredibly chic, low maintenance, and frames the face perfectly. Don not be afraid to make the chop. If you want to see more short hair, say yes.\\\"\\n\\nExample C — short layered cut:\\n\\\"Everyone told me not to cut it — I am so glad I did. These layers create incredible volume at the roots and soften the jawline naturally. If you want to see more short hair, say yes.\\\"\\n\\n==================================================\\nFIELD 1 — video_animation_prompt\\n==================================================\\nWrite all 10 lines below, in this exact order. Do not skip or merge any line.\\n\\nLine 1:\\nAnimate this image of a [age feel + hair color + specific cut name + clothing + accessories] in a [background and setting description].\\n\\nLine 2:\\nFirst 3 seconds: she does not speak. She [describe one specific, natural head or body movement that reveals the hair shape and texture — for example: slowly turns her head from left to right, pauses at center, then tilts her chin slightly down / gently lifts her hand to lightly touch her hair then lets it fall / rotates her profile to the left then faces forward with quiet confidence], maintaining a [describe expression — e.g. confident, radiant, serene, warm] expression, to showcase the texture and angles of her [specific hair style name]. Natural movement, confident and elegant.\\n\\nLine 3:\\nThen she looks directly at the camera, her expression shifts to warm and slightly conspiratorial — like she is about to share a secret — and she starts speaking in English with the energy of a confident beauty insider.\\n\\nLine 4:\\nDialogue (English):\\n\\\"[PART 1: your hook sentence] [PART 2: your two value sentences] If you want to see more short hair, say yes.\\\"\\n\\nLine 5:\\nFacial performance during speech: during the hook she raises one eyebrow slightly and pauses for half a beat. During the value sentences she nods slowly with quiet confidence. When she says \\\"If you want to see more short hair, say yes\\\" she leans very slightly toward the camera, her smile widens warmly, and she holds direct eye contact with the viewer.\\n\\nLine 6:\\nAdd subtle natural lip sync, blinking, and soft head movement while speaking.\\n\\nLine 7:\\nBackground music: soft, modern acoustic instrumental — low enough that every word is perfectly clear. The music should feel like a high-end beauty editorial, not a salon advertisement.\\n\\nLine 8:\\nCamera: cinematic close-up, very slight slow push-in as she delivers the final line to create intimacy. Subtle handheld movement throughout.\\n\\nLine 9:\\nLighting: [describe the actual lighting visible in the photo — direction left or right, warmth cool or warm, quality soft or harsh — for example: warm diffused salon backlighting with a soft key light on the left side of her face / cool natural window light from the right with a gentle fill on the shadow side].\\n\\nLine 10:\\nStyle: realistic, beauty content, high detail, shallow depth of field. Skin and hair texture must look natural and tactile — not filtered or over-processed.\\n\\n==================================================\\nFIELD 2 — post_title\\n==================================================\\n- 6-10 words, no hashtags\\n- Written like a viral beauty magazine headline\\n- Must create curiosity, desire, or mild controversy\\n- Never a plain description — it must make someone want to watch\\n- Examples:\\n  \\\"The Cut Your Stylist Has Been Hiding From You\\\"\\n  \\\"Why Every Woman Over 40 Is Choosing This Style\\\"\\n  \\\"This Is the Haircut That Changes Everything\\\"\\n  \\\"The Short Cut That Frames Every Face Perfectly\\\"\\n\\n==================================================\\nFIELD 3 — post_description\\n==================================================\\n- Exactly 3 sentences\\n- Sentence 1: name the specific hair style and describe the most striking visual detail\\n- Sentence 2: state one clear flattering benefit — face shape, skin tone, age, ease of styling\\n- Sentence 3 (FIXED — use this exact wording every time):\\n  \\\"If you want to see more short hair styles like this, say YES in the comments.\\\"\\n\\n==================================================\\nFIELD 4 — comment_bait\\n==================================================\\n- One sentence, posted as the FIRST COMMENT by the page owner\\n- Must use the YES mechanic to stay consistent with the video CTA\\n- Simple enough that anyone can reply in 1-3 words\\n- Always end with the down-pointing arrow emoji\\n- Use one of these exact formats (pick the best fit):\\n  \\\"Drop a YES below if you want more short hair inspiration like this every single day \\u2b07\\\"\\n  \\\"Say YES in the comments if this style made you want to book a salon appointment \\u2b07\\\"\\n  \\\"Type YES if you would try this cut on your next salon visit \\u2b07\\\"\\n\\n==================================================\\nFIELD 5 — hashtags\\n==================================================\\nReturn a JSON object with four keys: instagram, tiktok, facebook, pinterest.\\nEach value is an array of hashtag strings including the # symbol.\\n\\nInstagram — 28 tags total:\\n  8 mega tags (10M+ posts): broad beauty and hair reach\\n  10 mid tags (500K-10M posts): specific to this hair style, color, and audience\\n  10 micro tags (under 500K): highly specific to the exact cut, texture, age group\\n  Always include: #hairtransformation #hairinspo #beautycontent #reelsbeauty #hairgoals #shorthair #shorthaircut #shorthairstyle\\n\\nTikTok — 8 tags total:\\n  Always include: #hairtok #beautytok #fyp #shorthair\\n  Add 4 tags specific to the hair style seen in the photo\\n\\nFacebook — 12 tags total:\\n  Broader, community-style, easily readable\\n  Always include: #ShortHair #HairInspiration #BeautyTips #HairCare\\n\\nPinterest — 15 keyword-style tags (search-intent SEO):\\n  What would someone type to find this look?\\n  Include: hair color, cut name, length, texture, face shape benefit, styling tip\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Step 1 — Study the image carefully and write down:\\n- Hair: exact color including roots and ends, specific cut name, length, texture (straight / wavy / curly), layers, volume, any fringe or styling details\\n- Face: approximate age impression (e.g. late 30s, mid 50s), expression, skin tone\\n- Clothing: color and style (casual / chic / elegant)\\n- Accessories: glasses, earrings, necklace, scarf\\n- Background: setting and mood\\n- Lighting: direction (left / right / front / back), warmth (warm / cool / neutral), quality (soft / harsh / diffused)\\n\\nStep 2 — Write the HOOK sentence for this specific hair style. Make it emotional and relatable.\\n\\nStep 3 — Write the two VALUE sentences describing what makes this exact cut special based on what you see.\\n\\nStep 4 — Add the fixed CTA exactly as required: If you want to see more short hair, say yes.\\n\\nStep 5 — Build the full video_animation_prompt using all 10 lines in order.\\n\\nStep 6 — Write post_title, post_description, comment_bait.\\n\\nStep 7 — Generate all four hashtag arrays.\\n\\nReturn the complete JSON object.\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"{{ $json.url }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -240,
+        32
+      ],
+      "id": "3f9b9ca4-c64a-4734-bb3d-bd8ad6877cc7",
+      "name": "analys the pic to text"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1GDsHB4TAG6fpAjLKTI5zGippgtMX_LfU8aLJVsmLzLs",
+          "mode": "list",
+          "cachedResultName": "Haircuts Reels automations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GDsHB4TAG6fpAjLKTI5zGippgtMX_LfU8aLJVsmLzLs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GDsHB4TAG6fpAjLKTI5zGippgtMX_LfU8aLJVsmLzLs/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Prompts Animation": "={{ $('Parse, enforce CTA, validate').item.json.video_animation_prompt }}",
+            "Image Links": "={{ $json.image_public_url }}",
+            "title": "={{ $('Parse, enforce CTA, validate').item.json.post_title }}",
+            "description": "={{ $('Parse, enforce CTA, validate').item.json.post_description }}",
+            "facebook discription": "={{ $json.facebook_post }}",
+            "facebook tatile": "={{ $('Parse, enforce CTA, validate').item.json.post_title }}",
+            "instagram_comment": "={{ $json.instagram_comment }}",
+            "instagram caption ": "={{ $json.instagram_caption }}",
+            "tiktok_caption": "={{ $json.tiktok_caption }}",
+            "pinterest_title": "={{ $json.pinterest_title }}",
+            "pinterest_description": "={{ $json.pinterest_description }}",
+            "youtube_title": "={{ $json.youtube_title }}",
+            "youtube_description": "={{ $json.youtube_description }}",
+            "youtube_tags": "={{ $json.youtube_tags }}",
+            "youtube_chapters": "={{ $json.youtube_chapters }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Image Links",
+              "displayName": "Image Links",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Prompts Animation",
+              "displayName": "Prompts Animation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "facebook tatile",
+              "displayName": "facebook tatile",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "facebook discription",
+              "displayName": "facebook discription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "instagram_comment",
+              "displayName": "instagram_comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "instagram caption ",
+              "displayName": "instagram caption ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tiktok_caption",
+              "displayName": "tiktok_caption",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pinterest_title",
+              "displayName": "pinterest_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pinterest_description",
+              "displayName": "pinterest_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "youtube_title",
+              "displayName": "youtube_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "youtube_description",
+              "displayName": "youtube_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "youtube_tags",
+              "displayName": "youtube_tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "youtube_chapters",
+              "displayName": "youtube_chapters",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        880,
+        -64
+      ],
+      "id": "b007a946-c685-40e9-9334-ad6beadfa8cc",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zhOWfO3W85EvCFew",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Download the pic').item.json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1PEDazq4Zci4pv2KRpa9bfZJlSJ7EiaP-",
+          "mode": "list",
+          "cachedResultName": "pics to take",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1PEDazq4Zci4pv2KRpa9bfZJlSJ7EiaP-"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1104,
+        -64
+      ],
+      "id": "28d6d4a1-f8dc-46fb-b14c-d9abdeeddec9",
+      "name": "Move file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "WPwyhCkfm7vvFOq0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## get pic fromthe drive folder , and give the pic a public URL",
+        "height": 496,
+        "width": 912
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1232,
+        -304
+      ],
+      "typeVersion": 1,
+      "id": "caab848d-d8df-4cc0-8125-ae1982dbc8ab",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## OPENROUTER : generation of prompte \nwith high filter ",
+        "height": 544,
+        "width": 592,
+        "color": "#B63E7E"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -272,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "05de9427-407d-4305-ac08-31c117b2c932",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## make platforms content , restore it in DB , move the pic to another folder ",
+        "height": 464,
+        "width": 848,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        -352
+      ],
+      "typeVersion": 1,
+      "id": "e85c6e98-6c85-4901-8f71-1b6e1e62a511",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get one pic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get one pic": {
+      "main": [
+        [
+          {
+            "node": "Download the pic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download the pic": {
+      "main": [
+        [
+          {
+            "node": "Upload to Cloudinary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Cloudinary": {
+      "main": [
+        [
+          {
+            "node": "analys the pic to text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse, enforce CTA, validate": {
+      "main": [
+        [
+          {
+            "node": "Quality gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality gate": {
+      "main": [
+        [
+          {
+            "node": "Build YouTube content (no API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare fail log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build YouTube content (no API)": {
+      "main": [
+        [
+          {
+            "node": "Merge all platform content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge all platform content": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare fail log": {
+      "main": [
+        []
+      ]
+    },
+    "analys the pic to text": {
+      "main": [
+        [
+          {
+            "node": "Parse, enforce CTA, validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Move file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6f85b271-1985-4991-9620-6f3d04947be5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e9552097f1095cdccba7dc335012fd8cb1cc79bcfca9057194f1f336f9b221d1"
+  },
+  "id": "AjGctifqxKwSMRh7",
+  "tags": [
+    {
+      "name": "openrouter",
+      "id": "phnoR62YcpZ6ogVG",
+      "updatedAt": "2026-03-29T18:13:05.849Z",
+      "createdAt": "2026-03-29T18:13:05.849Z"
+    },
+    {
+      "name": "queen",
+      "id": "qkuXV0q1iXxhJpxs",
+      "updatedAt": "2026-03-29T18:13:11.730Z",
+      "createdAt": "2026-03-29T18:13:11.730Z"
+    },
+    {
+      "name": "cloudinary",
+      "id": "QdBn8ZikM6xo6xsW",
+      "updatedAt": "2026-03-29T18:13:23.674Z",
+      "createdAt": "2026-03-29T18:13:23.674Z"
+    },
+    {
+      "name": "drave",
+      "id": "YYrv9uL4cY167ODc",
+      "updatedAt": "2026-03-29T18:13:26.071Z",
+      "createdAt": "2026-03-29T18:13:26.071Z"
+    },
+    {
+      "name": "google sheets",
+      "id": "9wZEa7NA14ks76IF",
+      "updatedAt": "2026-03-29T18:13:33.321Z",
+      "createdAt": "2026-03-29T18:13:33.321Z"
+    }
+  ]
+}
